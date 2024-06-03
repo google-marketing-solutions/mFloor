@@ -1,3 +1,19 @@
+/*
+ * Copyright 2024 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -5,7 +21,7 @@ using GoogleMobileAds.Api;
 using Newtonsoft.Json;
 using UnityEngine;
 
-public class AdDynamicFloorManager : MonoBehaviour
+public class AdMultiFloorManager : MonoBehaviour
 {
     public struct Candidate
     {
@@ -19,13 +35,20 @@ public class AdDynamicFloorManager : MonoBehaviour
     {
         private class Entry
         {
-            // This should be ad-paids + no-fills.
+            /// <summary>
+            /// This should be ad-paids + no-fills.
+            /// </summary>
             public uint count;
 
-            // Micro value to align with AdValue.Value.
+            /// <summary>
+            /// Micro value to align with AdValue.Value.
+            /// </summary>
             public long usdValue;
         }
 
+        /// <summary>
+        /// Days of entries to keep. Change this to best reflect your user lifecycle.
+        /// </summary>
         private const int _daysToKeep = 7;
 
         [JsonProperty]
@@ -83,6 +106,9 @@ public class AdDynamicFloorManager : MonoBehaviour
             return (totalUsdValue / 1000000) / totalCount * 1000;
         }
 
+        /// <summary>
+        /// Remove old entries.
+        /// </summary>
         internal void Clean()
         {
             var minDate = GetDateInt(DateTime.Now) - _daysToKeep;
@@ -96,18 +122,18 @@ public class AdDynamicFloorManager : MonoBehaviour
     }
 
     #region Singleton
-    public static AdDynamicFloorManager Instance
+    public static AdMultiFloorManager Instance
     {
         get
         {
             if (_instance == null)
             {
-                _instance = FindObjectOfType<AdDynamicFloorManager>();
+                _instance = FindObjectOfType<AdMultiFloorManager>();
 
                 if (_instance == null)
                 {
-                    var obj = new GameObject { name = typeof(AdDynamicFloorManager).Name };
-                    _instance = obj.AddComponent<AdDynamicFloorManager>();
+                    var obj = new GameObject { name = typeof(AdMultiFloorManager).Name };
+                    _instance = obj.AddComponent<AdMultiFloorManager>();
                 }
             }
 
@@ -115,7 +141,7 @@ public class AdDynamicFloorManager : MonoBehaviour
         }
     }
 
-    private static AdDynamicFloorManager _instance;
+    private static AdMultiFloorManager _instance;
 
     private void Awake()
     {
@@ -132,16 +158,19 @@ public class AdDynamicFloorManager : MonoBehaviour
     }
     #endregion
 
-    private const string _playerPrefKey = "AdDynamicFloorManager.performanceByAdUnitId";
+    private const string _playerPrefKey = "AdMultiFloorManager.performanceByAdUnitId";
 
     private readonly Dictionary<string, Performance> _performanceByAdUnitId = new();
     private bool _synced = false;
 
     private readonly Dictionary<string, IList<Candidate>> _candidatesByAdUnitId = new();
 
-    public void RecordNoFill(string adUnitId)
+    /// <summary>
+    /// Records no-fill. Call this inside `RewardedAd.Load`'s callback when ad request returns no-fill.
+    /// </summary>
+    public void RecordNoFill(string parentAdUnitId)
     {
-        Record(adUnitId, new AdValue
+        Record(parentAdUnitId, new AdValue
         {
             Precision = AdValue.PrecisionType.Estimated,
             CurrencyCode = "USD",
@@ -149,7 +178,10 @@ public class AdDynamicFloorManager : MonoBehaviour
         });
     }
 
-    public void RecordAdPaid(string adUnitId, AdValue adValue)
+    /// <summary>
+    /// Records ad paid value. Call this inside GMA SDK's `OnAdPaid` callback.
+    /// </summary>
+    public void RecordAdPaid(string parentAdUnitId, AdValue adValue)
     {
         // Skip non-waterfall cases.
         if (adValue.Precision != AdValue.PrecisionType.Estimated &&
@@ -158,21 +190,31 @@ public class AdDynamicFloorManager : MonoBehaviour
             return;
         }
 
-        Record(adUnitId, adValue);
+        Record(parentAdUnitId, adValue);
     }
 
-    public void RegisterCandidates(string adUnitId, IList<Candidate> candidates)
+    /// <summary>
+    /// Registers candidate ad units for the parent ad unit you want to enable multi-floor.
+    /// It's important to call this method **before** you make ad requests.
+    /// </summary>
+    public void RegisterCandidates(string parentAdUnitId, IList<Candidate> candidates)
     {
         var sorted = new List<Candidate>(candidates);
         // Sort from high to low.
         sorted.Sort((a, b) => a.cpm > b.cpm ? -1 : 1);
-        _candidatesByAdUnitId.Add(adUnitId, sorted);
+        _candidatesByAdUnitId.Add(parentAdUnitId, sorted);
     }
 
-    public Candidate? GetCandidate(string adUnitId)
+    /// <summary>
+    /// Gets the candidate ad unit to use for next ad request.
+    /// Returns null when no candidate is available.
+    /// This method calculates a referential CPM from historical records and
+    /// finds the candidate with the highest CPM which is lower than referential CPM.
+    /// </summary>
+    public Candidate? GetCandidate(string parentAdUnitId)
     {
-        if (!_performanceByAdUnitId.TryGetValue(adUnitId, out var performance) ||
-                !_candidatesByAdUnitId.TryGetValue(adUnitId, out var candidateList))
+        if (!_performanceByAdUnitId.TryGetValue(parentAdUnitId, out var performance) ||
+                !_candidatesByAdUnitId.TryGetValue(parentAdUnitId, out var candidateList))
         {
             return null;
         }
@@ -190,12 +232,12 @@ public class AdDynamicFloorManager : MonoBehaviour
         return null;
     }
 
-    private void Record(string adUnitId, AdValue adValue)
+    private void Record(string parentAdUnitId, AdValue adValue)
     {
-        if (!_performanceByAdUnitId.TryGetValue(adUnitId, out var performance))
+        if (!_performanceByAdUnitId.TryGetValue(parentAdUnitId, out var performance))
         {
             performance = new Performance();
-            _performanceByAdUnitId.Add(adUnitId, performance);
+            _performanceByAdUnitId.Add(parentAdUnitId, performance);
         }
 
         performance.Record(adValue);
@@ -216,7 +258,7 @@ public class AdDynamicFloorManager : MonoBehaviour
             }
             catch (Exception)
             {
-                Debug.LogErrorFormat("[AdDynamicFloorManager] Failed loading from storage.");
+                Debug.LogErrorFormat("[AdMultiFloorManager] Failed loading from storage.");
                 return;
             }
 
@@ -250,7 +292,7 @@ public class AdDynamicFloorManager : MonoBehaviour
         }
         catch (Exception)
         {
-            Debug.LogError("[AdDynamicFloorManager] Failed saving to storage.");
+            Debug.LogError("[AdMultiFloorManager] Failed saving to storage.");
         }
 
         _synced = true;
@@ -278,9 +320,9 @@ public class AdDynamicFloorManager : MonoBehaviour
     }
 
     #region Debug
-    public double GetReferentialCpm(string adUnitId)
+    public double GetReferentialCpm(string parentAdUnitId)
     {
-        if (!_performanceByAdUnitId.TryGetValue(adUnitId, out var performance))
+        if (!_performanceByAdUnitId.TryGetValue(parentAdUnitId, out var performance))
         {
             return 0;
         }

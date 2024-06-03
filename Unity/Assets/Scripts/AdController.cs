@@ -1,3 +1,19 @@
+/*
+ * Copyright 2024 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 using GoogleMobileAds.Api;
 using TMPro;
 using UnityEngine;
@@ -25,8 +41,8 @@ public class AdController : MonoBehaviour
 
     public void Start()
     {
-        AdDynamicFloorManager.Instance.RegisterCandidates(_parentAdUnitId,
-                new AdDynamicFloorManager.Candidate[]
+        AdMultiFloorManager.Instance.RegisterCandidates(_parentAdUnitId,
+                new AdMultiFloorManager.Candidate[]
                 {
                     new() { cpm = 1.0, adUnitId = "ca-app-pub-3940256099942544/1111111111" },
                     new() { cpm = 2.0, adUnitId = "ca-app-pub-3940256099942544/2222222222" },
@@ -73,12 +89,12 @@ public class AdController : MonoBehaviour
 
         var adRequest = new AdRequest();
 
-        var candidate = AdDynamicFloorManager.Instance.GetCandidate(_parentAdUnitId);
+        var candidate = AdMultiFloorManager.Instance.GetCandidate(_parentAdUnitId);
         var adUnitId = candidate.HasValue ? candidate.Value.adUnitId : _parentAdUnitId;
 
         LogToConsole(
             "Referential CPM: ${0}\nCandidate: {1}\n\nLoad ad unit: {2}",
-            AdDynamicFloorManager.Instance.GetReferentialCpm(_parentAdUnitId),
+            AdMultiFloorManager.Instance.GetReferentialCpm(_parentAdUnitId),
             candidate.HasValue
                     ? string.Format("\n\tCPM: ${0}\n\tad unit: {1}",
                             candidate.Value.cpm, candidate.Value.adUnitId)
@@ -103,7 +119,7 @@ public class AdController : MonoBehaviour
 #endif
                 )
                 {
-                    AdDynamicFloorManager.Instance.RecordNoFill(_parentAdUnitId);
+                    AdMultiFloorManager.Instance.RecordNoFill(_parentAdUnitId);
                 }
 
                 LogToConsole("Rewarded ad failed to load an ad with error: {0}", error);
@@ -133,13 +149,13 @@ public class AdController : MonoBehaviour
 
     public void ManualRecordNoFIll()
     {
-        AdDynamicFloorManager.Instance.RecordNoFill(_parentAdUnitId);
+        AdMultiFloorManager.Instance.RecordNoFill(_parentAdUnitId);
         LogToConsole("Recorded no fill.");
     }
 
     public void ManualRecordAdPaid(float usdValue)
     {
-        AdDynamicFloorManager.Instance.RecordAdPaid(_parentAdUnitId, new AdValue
+        AdMultiFloorManager.Instance.RecordAdPaid(_parentAdUnitId, new AdValue
         {
             Precision = AdValue.PrecisionType.Estimated,
             CurrencyCode = "USD",
@@ -150,13 +166,13 @@ public class AdController : MonoBehaviour
 
     public void ResetRecords()
     {
-        AdDynamicFloorManager.Instance.ClearStorage();
+        AdMultiFloorManager.Instance.ClearStorage();
         LogToConsole("Cleared.");
     }
 
     public void PrintDebugInfo()
     {
-        LogToConsole(AdDynamicFloorManager.Instance.GetDebugInfo());
+        LogToConsole(AdMultiFloorManager.Instance.GetDebugInfo());
     }
 
     public void ClearConsole()
@@ -187,7 +203,7 @@ public class AdController : MonoBehaviour
         {
             LogToConsole("Rewarded ad paid {0} {1}.", adValue.Value, adValue.CurrencyCode);
 
-            AdDynamicFloorManager.Instance.RecordAdPaid(_parentAdUnitId, adValue);
+            AdMultiFloorManager.Instance.RecordAdPaid(_parentAdUnitId, adValue);
         };
 
         ad.OnAdFullScreenContentClosed += () =>
