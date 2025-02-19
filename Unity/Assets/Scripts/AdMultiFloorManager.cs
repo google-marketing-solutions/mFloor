@@ -87,7 +87,7 @@ public class AdMultiFloorManager : MonoBehaviour
 
         internal double GetReferentialCpm()
         {
-            var minDate = GetDateInt(DateTime.Now) - _daysToKeep;
+            var minDate = GetDateInt(DateTime.Now.AddDays(-_daysToKeep));
 
             uint totalCount = 0;
             double totalUsdValue = 0;
@@ -111,7 +111,7 @@ public class AdMultiFloorManager : MonoBehaviour
         /// </summary>
         internal void Clean()
         {
-            var minDate = GetDateInt(DateTime.Now) - _daysToKeep;
+            var minDate = GetDateInt(DateTime.Now.AddDays(-_daysToKeep));
             var entriesToRemove = _entryByDate
                     .Where(e => e.Key <= minDate).ToArray();
             foreach (var pair in entriesToRemove)
