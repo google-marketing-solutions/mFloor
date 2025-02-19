@@ -88,13 +88,16 @@ public class AdMultiFloorManager : MonoBehaviour
         internal double GetReferentialCpm()
         {
             var minDate = GetDateInt(DateTime.Now.AddDays(-_daysToKeep));
+            // Avoid using current date's data which may cause frequent changes
+            // to ad unit being called and results in multi-call throttling.
+            var maxDate = GetDateInt(DateTime.Now.AddDays(-1));
 
             uint totalCount = 0;
             double totalUsdValue = 0;
 
             foreach (var pair in _entryByDate)
             {
-                if (pair.Key <= minDate)
+                if (pair.Key < minDate || pair.Key > maxDate)
                 {
                     continue;
                 }
@@ -113,7 +116,7 @@ public class AdMultiFloorManager : MonoBehaviour
         {
             var minDate = GetDateInt(DateTime.Now.AddDays(-_daysToKeep));
             var entriesToRemove = _entryByDate
-                    .Where(e => e.Key <= minDate).ToArray();
+                    .Where(e => e.Key < minDate).ToArray();
             foreach (var pair in entriesToRemove)
             {
                 _entryByDate.Remove(pair.Key);
